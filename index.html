@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VTuber Catch Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&display=swap');
+        
+        body {
+            margin: 0;
+            overflow: hidden;
+            touch-action: none;
+            background: #fff9f0;
+            font-family: 'M PLUS Rounded 1c', sans-serif;
+        }
+        #game-canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: env(safe-area-inset-top, 20px) 20px;
+            pointer-events: none;
+            display: flex;
+            justify-content: space-between;
+            z-index: 10;
+        }
+        .ui-text {
+            font-size: 1.25rem;
+            font-weight: 900;
+            color: #333;
+            background: white;
+            border: 3px solid #333;
+            padding: 8px 20px;
+            border-radius: 999px;
+            box-shadow: 4px 4px 0px #333;
+        }
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 249, 240, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .modal {
+            background: white;
+            padding: 2.5rem 2rem;
+            border-radius: 2rem;
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+            border: 4px solid #333;
+            box-shadow: 8px 8px 0px #333;
+        }
+        .btn-black {
+            background-color: #333;
+            color: white;
+            width: 100%;
+            padding: 16px;
+            border-radius: 999px;
+            font-weight: 900;
+            font-size: 1.25rem;
+            border: 2px solid #000;
+        }
+        .x-button {
+            background-color: #000;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 12px;
+            border-radius: 999px;
+            font-weight: bold;
+            margin-top: 12px;
+        }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<canvas id="game-canvas"></canvas>
+
+<div id="ui-layer">
+    <div id="score-display" class="ui-text">スコア: 0</div>
+    <div id="timer-display" class="ui-text">残り: 60s</div>
+</div>
+
+<div id="modal-screen" class="overlay">
+    <div class="modal">
+        <h1 id="modal-title" class="text-3xl font-black mb-4 text-gray-800">VTuber Catch!</h1>
+        <p id="modal-desc" class="text-gray-600 mb-8 font-bold">降り注ぐVTuberたちを<br>カゴでキャッチしよう！</p>
+        
+        <div class="flex flex-col gap-3">
+            <button id="start-btn" class="btn-black">スタート</button>
+            <button id="share-btn" class="x-button hidden">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"></path></svg>
+                結果をポストする
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+    const scoreDisplay = document.getElementById('score-display');
+    const timerDisplay = document.getElementById('timer-display');
+    const modalScreen = document.getElementById('modal-screen');
+    const modalTitle = document.getElementById('modal-title');
+    const modalDesc = document.getElementById('modal-desc');
+    const startBtn = document.getElementById('start-btn');
+    const shareBtn = document.getElementById('share-btn');
+
+    const vtubers = [
+        { name: "Maya", url: "https://www.dropbox.com/scl/fi/tfnn7542neu228cwekjkt/Maya.png?rlkey=wy3m284q5cfcoh9x9kdsc6v4a&st=l7uykzpd&raw=1" },
+        { name: "Arumi", url: "https://www.dropbox.com/scl/fi/rn58hhfd429o28u9r64kw/Arumi.png?rlkey=smqr8afxgfw7rn0d1izfg44zq&st=p3ypc9os&raw=1" },
+        { name: "Pome", url: "https://www.dropbox.com/scl/fi/dny6yxu5y7wiwwlxb2jjt/Pome.png?rlkey=wdt01ve6bb2k3jl26dhdfz8rb&st=h1c87vcg&raw=1" },
+        { name: "Mitama", url: "https://www.dropbox.com/scl/fi/av4yper2nwan5tecpmw9g/Mitama.png?rlkey=6m9fsksl6sbvte12vqbpmmdc1&st=s9jm8p5j&raw=1" },
+        { name: "Kapura", url: "https://www.dropbox.com/scl/fi/fkyktllkg0lgabyn82pe4/Kapura.png?rlkey=rfkqza7nktcvo8pk443c98ps2&st=wzzm9fcm&raw=1" },
+        { name: "Yasumi", url: "https://www.dropbox.com/scl/fi/fcn137gxv40h6ud56api2/Yasumi.png?rlkey=nbx5v04ewgi6qa1twl8dz848k&st=0830x86o&raw=1" },
+        { name: "Kanon", url: "https://www.dropbox.com/scl/fi/fhx6uvmum8jfi4e8w5e0h/Kanon.png?rlkey=xubkrte1vki80yeoncwj2qk76&st=cvqbryk1&raw=1" },
+        { name: "Kaede", url: "https://www.dropbox.com/scl/fi/wgy6f5uwn6ky3pcg5rnln/Kaede.png?rlkey=56l0ckxv0iq4klcpi1mki63tr&st=wssbu6c4&raw=1" }
+    ];
+
+    const imageMap = {};
+    vtubers.forEach(v => {
+        const img = new Image();
+        img.src = v.url;
+        imageMap[v.name] = img;
+    });
+
+    let width, height, dpr;
+    let player = { x: 0, y: 0, w: 100, h: 60 }; // カゴのヒットボックス
+    let items = [];
+    let score = 0;
+    let timeLeft = 60;
+    let isGameRunning = false;
+    let lastSpawnTime = 0;
+    let timerInterval = null;
+    let animationId = null;
+
+    function resize() {
+        dpr = window.devicePixelRatio || 1;
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        ctx.scale(dpr, dpr);
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+        player.y = height - 120;
+        if (!isGameRunning) player.x = (width / 2) - (player.w / 2);
+    }
+
+    function handleInput(clientX) {
+        if (!isGameRunning) return;
+        player.x = clientX - (player.w / 2);
+        if (player.x < 0) player.x = 0;
+        if (player.x > width - player.w) player.x = width - player.w;
+    }
+
+    canvas.addEventListener('mousemove', (e) => handleInput(e.clientX));
+    canvas.addEventListener('touchstart', (e) => handleInput(e.touches.clientX), { passive: false });
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        handleInput(e.touches.clientX);
+    }, { passive: false });
+
+    function createItem() {
+        const isBomb = Math.random() < 0.15;
+        const vtuber = vtubers[Math.floor(Math.random() * vtubers.length)];
+        const size = 80;
+        
+        items.push({
+            x: Math.random() * (width - size),
+            y: -size - 20,
+            isBomb: isBomb,
+            vtName: vtuber.name,
+            speed: 3 + (score / 600) + Math.random() * 2,
+            size: size
+        });
+    }
+
+    function gameLoop(timestamp) {
+        if (!isGameRunning) return;
+
+        if (!lastSpawnTime) lastSpawnTime = timestamp;
+        if (timestamp - lastSpawnTime > 750) {
+            createItem();
+            lastSpawnTime = timestamp;
+        }
+
+        for (let i = items.length - 1; i >= 0; i--) {
+            const it = items[i];
+            it.y += it.speed;
+
+            // 当たり判定の修正 (カゴの口付近に限定)
+            const itemCenterX = it.x + it.size / 2;
+            const itemBottomY = it.y + it.size * 0.8; // キャラの下の方で判定
+
+            if (
+                itemBottomY > player.y && 
+                itemBottomY < player.y + player.h &&
+                itemCenterX > player.x && 
+                itemCenterX < player.x + player.w
+            ) {
+                if (it.isBomb) {
+                    endGame("爆弾に当たった！");
+                    return;
+                }
+                score += 10;
+                scoreDisplay.innerText = `スコア: ${score}`;
+                items.splice(i, 1);
+                continue;
+            }
+
+            if (it.y > height + 100) items.splice(i, 1);
+        }
+
+        ctx.clearRect(0, 0, width, height);
+        
+        // 背景
+        ctx.fillStyle = "#fff9f0";
+        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = "#ffe8d6";
+        for(let x=15; x<width; x+=30) {
+            for(let y=15; y<height; y+=30) {
+                ctx.beginPath();
+                ctx.arc(x, y, 2, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        // プレイヤー (カゴ)
+        ctx.font = '80px "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🧺', player.x + (player.w / 2), player.y + 30);
+
+        // アイテム
+        items.forEach(it => {
+            if (it.isBomb) {
+                ctx.font = '50px "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
+                ctx.fillText('💣', it.x + (it.size / 2), it.y + (it.size / 2));
+            } else {
+                const img = imageMap[it.vtName];
+                if (img && img.complete) {
+                    ctx.drawImage(img, it.x, it.y, it.size, it.size);
+                }
+            }
+        });
+
+        animationId = requestAnimationFrame(gameLoop);
+    }
+
+    function startGame() {
+        score = 0;
+        timeLeft = 60;
+        items = [];
+        lastSpawnTime = 0;
+        scoreDisplay.innerText = "スコア: 0";
+        timerDisplay.innerText = "残り: 60s";
+        isGameRunning = true;
+        modalScreen.style.display = 'none';
+        shareBtn.classList.add('hidden');
+        
+        if (timerInterval) clearInterval(timerInterval);
+        if (animationId) cancelAnimationFrame(animationId);
+        
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            timerDisplay.innerText = `残り: ${timeLeft}s`;
+            if (timeLeft <= 0) endGame("タイムアップ！");
+        }, 1000);
+        
+        requestAnimationFrame(gameLoop);
+    }
+
+    function endGame(reason) {
+        isGameRunning = false;
+        clearInterval(timerInterval);
+        if (animationId) cancelAnimationFrame(animationId);
+        
+        modalTitle.innerText = reason;
+        modalDesc.innerHTML = `最終スコア: <span class="text-3xl font-black text-pink-500">${score}</span>`;
+        startBtn.innerText = "もう一度プレイ";
+        modalScreen.style.display = 'flex';
+        shareBtn.classList.remove('hidden');
+    }
+
+    startBtn.onclick = startGame;
+    shareBtn.onclick = () => {
+        const text = encodeURIComponent(`「VTuber Catch!」でスコア ${score} を獲得しました！✨\n#未来V書店 #VTuberCatch`);
+        const url = `https://twitter.com/intent/tweet?text=${text}`;
+        window.open(url, '_blank');
+    };
+
+    window.addEventListener('resize', resize);
+    window.onload = resize;
+</script>
+
+</body>
+</html>
